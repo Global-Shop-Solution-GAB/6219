@@ -1,0 +1,204 @@
+Program.Sub.ScreenSU.Start
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Bryan Pham
+'12/13/2020
+'Customer: COX MACHINE
+'Export payroll to Paycor
+
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Control.If(V.Caller.Hook,=,15290)
+	F.Intrinsic.Control.CallSub(Data)
+F.Intrinsic.Control.EndIf
+'F.Intrinsic.Control.CallSub(Data)
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(Error,"SubRoutine",V.Ambient.CurrentSubroutine,"eNumber",V.Ambient.ErrorNumber,"eDESCRiption",V.Ambient.ErrorDESCRiption)
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.Data.Start
+F.Intrinsic.Control.Try
+V.Local.sRunTime.Declare
+V.Local.sRunDate.Declare
+V.Local.sSQL.Declare
+V.Local.iCount.Declare
+V.Local.sFilter.Declare
+V.Local.sRet.Declare
+V.Local.sRet1.Declare
+V.Local.sRet2.Declare
+V.Local.sRet3.Declare
+V.Local.sRet4.Declare
+V.Local.sLineTxt.Declare
+V.Local.sFileName.Declare
+V.Local.sCymd.Declare
+V.Local.sMon.Declare
+V.Local.sDay.Declare
+V.Local.sYear.Declare
+V.Local.DDATE.Declare
+V.Local.sRunDate1.Declare
+V.Local.sPath.Declare
+V.Local.sNoHol.Declare
+V.Local.sNoHolDt.Declare
+V.Local.sNoHolYY.Declare
+V.Local.sNoHolMM.Declare
+V.Local.sNoHolDD.Declare
+
+F.Intrinsic.String.Mid(V.Passed.888888.Trim,9,6,V.Local.sRunTime)
+F.Intrinsic.String.Left(V.Passed.888888.Trim,8,V.Local.sRunDate)
+
+F.ODBC.Connection!conts.OpenCompanyConnection
+
+'Creating base datatable to create special header row
+F.Data.DataTable.Create("dtPyrl",True)
+F.Data.DataTable.AddColumn("dtPyrl","Employee","String")
+F.Data.DataTable.AddColumn("dtPyrl","RegHrs","String")
+F.Data.DataTable.AddColumn("dtPyrl","OTHrs","String")
+F.Data.DataTable.AddColumn("dtPyrl","Sick","String")
+F.Data.DataTable.AddColumn("dtPyrl","Vacay","String")
+F.Data.DataTable.AddColumn("dtPyrl","Hol","String")
+F.Data.DataTable.AddColumn("dtPyrl","Bonus","String")
+F.Data.DataTable.AddColumn("dtPyrl","Funeral_Jury","String")
+F.Data.DataTable.AddColumn("dtPyrl","Parental","String")
+F.Data.DataTable.AddColumn("dtPyrl","Deferred_Comp","String")
+F.Data.DataTable.AddColumn("dtPyrl","Emergency_Sick","String")
+F.Data.DataTable.AddColumn("dtPyrl","FMLA","String")
+
+F.Data.DataTable.AddRow("dtPyrl","Employee","Employee","RegHrs","Regular Hrs","OTHrs","OT Hrs","Sick"," Sick Hrs","Vacay","Vacation Hrs","Hol"," Holiday Hrs","Bonus","Bonus Hrs","Funeral_Jury"," Funeral/Jury Duty Hrs","Parental"," Paid Parental leave Hrss","Deferred_Comp"," Deferred Comp Hrs","Emergency_Sick","Emergency Sick Hrs","FMLA","FMLA Hrs")
+
+'Collecting data for the period
+F.Intrinsic.String.Build("Select distinct RTRIM(EMPLOYEE) as Employee from PYRL_LABOR_XFER where Run_Cymd = '{0}' and Run_Time = '{1}'",V.Local.sRunDate,V.Local.sRunTime,V.Local.sSQL)
+
+F.Data.DataTable.CreateFromSQL("dtPyrl2","conts",V.Local.sSQL,True)
+F.Data.DataTable.AddColumn("dtPyrl2","RegHrs","String")
+F.Data.DataTable.AddColumn("dtPyrl2","OTHrs","String")
+F.Data.DataTable.AddColumn("dtPyrl2","Sick","String")
+F.Data.DataTable.AddColumn("dtPyrl2","Vacay","String")
+F.Data.DataTable.AddColumn("dtPyrl2","Hol","String")
+F.Data.DataTable.AddColumn("dtPyrl2","Bonus","String")
+F.Data.DataTable.AddColumn("dtPyrl2","Funeral_Jury","String")
+F.Data.DataTable.AddColumn("dtPyrl2","Parental","String")
+F.Data.DataTable.AddColumn("dtPyrl2","Deferred_Comp","String")
+F.Data.DataTable.AddColumn("dtPyrl2"," Emergency_Sick","String")
+F.Data.DataTable.AddColumn("dtPyrl2"," FMLA","String")
+
+'Separating various types and earnings codes into separate columns
+
+'Regular
+F.Intrinsic.String.Build("Select RTRIM(EMPLOYEE) as Employee,sum(CAST(RTRIM(hours) AS DOUBLE)) as RegHrs from PYRL_LABOR_XFER where Run_Cymd = '{0}' and Run_Time = '{1}' and (TYPE in ('RT') or EC = '01') group by Employee order by Employee;",V.Local.sRunDate,V.Local.sRunTime,V.Local.sSQL)
+F.Data.Dictionary.CreateFromSQL("dictRT","conts",V.Local.sSQL)
+F.Data.Dictionary.SetDefaultReturn("dictRT","")
+F.Data.DataTable.FillFromDictionary("dtPyrl2","dictRT","Employee","RegHrs")
+F.Data.Dictionary.Close("dictRT")
+
+'Overtime
+F.Intrinsic.String.Build("Select RTRIM(EMPLOYEE) as Employee,sum(CAST(RTRIM(hours) AS DOUBLE)) as OTHrs from PYRL_LABOR_XFER where Run_Cymd = '{0}' and Run_Time = '{1}' and TYPE = 'OT' group by Employee;",V.Local.sRunDate,V.Local.sRunTime,V.Local.sSQL)
+F.Data.Dictionary.CreateFromSQL("dictOT","conts",V.Local.sSQL)
+F.Data.Dictionary.SetDefaultReturn("dictOT","")
+F.Data.DataTable.FillFromDictionary("dtPyrl2","dictOT","Employee","OTHrs")
+F.Data.Dictionary.Close("dictOT")
+
+'Sick - EC 2
+F.Intrinsic.String.Build("Select RTRIM(EMPLOYEE) as Employee,sum(CAST(RTRIM(hours) AS DOUBLE)) as Sick from PYRL_LABOR_XFER where Run_Cymd = '{0}' and Run_Time = '{1}' and EC = '02' group by Employee;",V.Local.sRunDate,V.Local.sRunTime,V.Local.sSQL)
+F.Data.Dictionary.CreateFromSQL("dictSick","conts",V.Local.sSQL)
+F.Data.Dictionary.SetDefaultReturn("dictSick","")
+F.Data.DataTable.FillFromDictionary("dtPyrl2","dictSick","Employee","Sick")
+F.Data.Dictionary.Close("dictSick")
+
+'Vacay - EC 3
+F.Intrinsic.String.Build("Select RTRIM(EMPLOYEE) as Employee,sum(CAST(RTRIM(hours) AS DOUBLE)) as Vacay from PYRL_LABOR_XFER where Run_Cymd = '{0}' and Run_Time = '{1}' and EC = '03' group by Employee;",V.Local.sRunDate,V.Local.sRunTime,V.Local.sSQL)
+F.Data.Dictionary.CreateFromSQL("dictVacay","conts",V.Local.sSQL)
+F.Data.Dictionary.SetDefaultReturn("dictVacay","")
+F.Data.DataTable.FillFromDictionary("dtPyrl2","dictVacay","Employee","Vacay")
+F.Data.Dictionary.Close("dictVacay")
+
+'Holiday - EC 4
+F.Intrinsic.String.Build("Select RTRIM(EMPLOYEE) as Employee,sum(CAST(RTRIM(hours) AS DOUBLE)) as Hol from PYRL_LABOR_XFER where Run_Cymd = '{0}' and Run_Time = '{1}' and EC = '04' group by Employee;",V.Local.sRunDate,V.Local.sRunTime,V.Local.sSQL)
+F.Data.Dictionary.CreateFromSQL("dictHol","conts",V.Local.sSQL)
+F.Data.Dictionary.SetDefaultReturn("dictHol","")
+F.Data.DataTable.FillFromDictionary("dtPyrl2","dictHol","Employee","Hol")
+F.Data.Dictionary.Close("dictHol")
+
+'Bonus - EC 5
+F.Intrinsic.String.Build("Select RTRIM(EMPLOYEE) as Employee,sum(CAST(RTRIM(hours) AS DOUBLE)) as Bonus from PYRL_LABOR_XFER where Run_Cymd = '{0}' and Run_Time = '{1}' and EC = '05' group by Employee;",V.Local.sRunDate,V.Local.sRunTime,V.Local.sSQL)
+F.Data.Dictionary.CreateFromSQL("dictBonus","conts",V.Local.sSQL)
+F.Data.Dictionary.SetDefaultReturn("dictBonus","")
+F.Data.DataTable.FillFromDictionary("dtPyrl2","dictBonus","Employee","Bonus")
+F.Data.Dictionary.Close("dictBonus")
+
+'Funeral/Jury Duty Hrs; - EC 6
+F.Intrinsic.String.Build("Select RTRIM(EMPLOYEE) as Employee,sum(CAST(RTRIM(hours) AS DOUBLE)) as Funeral_Jury from PYRL_LABOR_XFER where Run_Cymd = '{0}' and Run_Time = '{1}' and EC = '06' group by Employee;",V.Local.sRunDate,V.Local.sRunTime,V.Local.sSQL)
+F.Data.Dictionary.CreateFromSQL("dictFuneral_Juryl","conts",V.Local.sSQL)
+F.Data.Dictionary.SetDefaultReturn("dictFuneral_Juryl","")
+F.Data.DataTable.FillFromDictionary("dtPyrl2","dictFuneral_Juryl","Employee","Funeral_Jury")
+F.Data.Dictionary.Close("dictFuneral_Juryl")
+
+' Paid Parental leave Hrs - EC 7
+F.Intrinsic.String.Build("Select RTRIM(EMPLOYEE) as Employee,sum(CAST(RTRIM(hours) AS DOUBLE)) as Parental from PYRL_LABOR_XFER where Run_Cymd = '{0}' and Run_Time = '{1}' and EC = '07' group by Employee;",V.Local.sRunDate,V.Local.sRunTime,V.Local.sSQL)
+F.Data.Dictionary.CreateFromSQL("dictParental","conts",V.Local.sSQL)
+F.Data.Dictionary.SetDefaultReturn("dictParental","")
+F.Data.DataTable.FillFromDictionary("dtPyrl2","dictParental","Employee","Parental")
+F.Data.Dictionary.Close("dictParental")
+
+' Deferred Comp Hrs - EC 8
+F.Intrinsic.String.Build("Select RTRIM(EMPLOYEE) as Employee,sum(CAST(RTRIM(hours) AS DOUBLE)) as Deferred_Comp from PYRL_LABOR_XFER where Run_Cymd = '{0}' and Run_Time = '{1}' and EC = '08' group by Employee;",V.Local.sRunDate,V.Local.sRunTime,V.Local.sSQL)
+F.Data.Dictionary.CreateFromSQL("dictDeferred_Comp","conts",V.Local.sSQL)
+F.Data.Dictionary.SetDefaultReturn("dictDeferred_Comp","")
+F.Data.DataTable.FillFromDictionary("dtPyrl2","dictDeferred_Comp","Employee","Deferred_Comp")
+F.Data.Dictionary.Close("dictDeferred_Comp")
+
+' Emergency Sick Hrs - EC 9
+F.Intrinsic.String.Build("Select RTRIM(EMPLOYEE) as Employee,sum(CAST(RTRIM(hours) AS DOUBLE)) as Emergency_Sick from PYRL_LABOR_XFER where Run_Cymd = '{0}' and Run_Time = '{1}' and EC = '09' group by Employee;",V.Local.sRunDate,V.Local.sRunTime,V.Local.sSQL)
+F.Data.Dictionary.CreateFromSQL("dictEmergency_Sick","conts",V.Local.sSQL)
+F.Data.Dictionary.SetDefaultReturn("dictEmergency_Sick","")
+F.Data.DataTable.FillFromDictionary("dtPyrl2","dictEmergency_Sick","Employee","Emergency_Sick")
+F.Data.Dictionary.Close("dictEmergency_Sick")
+
+'FMLA Hrs - EC 10
+F.Intrinsic.String.Build("Select RTRIM(EMPLOYEE) as Employee,sum(CAST(RTRIM(hours) AS DOUBLE)) as FMLA from PYRL_LABOR_XFER where Run_Cymd = '{0}' and Run_Time = '{1}' and EC = '10' group by Employee;",V.Local.sRunDate,V.Local.sRunTime,V.Local.sSQL)
+F.Data.Dictionary.CreateFromSQL("dictFMLA","conts",V.Local.sSQL)
+F.Data.Dictionary.SetDefaultReturn("dictFMLA","")
+F.Data.DataTable.FillFromDictionary("dtPyrl2","dictFMLA","Employee","FMLA")
+F.Data.Dictionary.Close("dictFMLA")
+
+
+F.Data.DataTable.Merge("dtPyrl2","dtPyrl",True,1)
+
+
+'Saving CSV file
+F.Intrinsic.UI.ShowSaveFileDialog("","csv|*.csv",V.Local.sPath)
+
+F.Intrinsic.String.Split(V.Local.sPath,".",V.Local.sPath)
+
+F.Intrinsic.String.Build("{0}.csv",V.Local.sPath(0),V.Local.sPath)
+
+F.Data.DataTable.SaveToCSV("dtPyrl",V.Local.sPath,False)
+
+F.Intrinsic.String.Build("File saved to {0}",V.Local.sPath.Trim,V.Local.sSQL)
+
+F.Intrinsic.UI.Msgbox(V.Local.sSQL,"Success!")
+
+F.Data.DataTable.Close("dtPyrl")
+
+F.ODBC.Connection!conts.Close
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(Error,"SubRoutine",V.Ambient.CurrentSubroutine,"eNumber",V.Ambient.ErrorNumber,"eDESCRiption",V.Ambient.ErrorDESCRiption)
+F.Intrinsic.Control.EndTry
+Program.Sub.Data.End
+
+Program.Sub.Error.Start
+V.Local.sError.Declare
+V.Local.iRet.Declare
+V.Local.sSep.Declare
+
+F.Intrinsic.String.Build("-------------------------------------------------------------------------------------",,V.Local.sSep)
+F.Intrinsic.String.Build("({5}-{6}){0}{7}{0}Project: {4}{0}{7}{0}Sub: {1}{0}Error: {2}, {3}", V.Ambient.NewLine, V.Args.SubRoutine, V.Args.eNumber, V.Args.eDESCRiption,V.Caller.ScriptFile,V.Ambient.Date, V.Ambient.Time,V.Local.sSep,V.Local.sError)
+F.Intrinsic.UI.Msgbox(V.Local.sError,"Error",V.Local.iRet)
+Program.Sub.Error.End
